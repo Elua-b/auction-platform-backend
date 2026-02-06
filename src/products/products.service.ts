@@ -57,8 +57,69 @@ export class ProductsService {
     }
 
     async remove(id: string) {
-        return this.prisma.product.delete({
+        // First check if product exists and get related data
+        const product = await this.prisma.product.findUnique({
             where: { id },
+            include: {
+                auction: {
+                    include: {
+                        bids: true,
+                    },
+                },
+                eventProducts: {
+                    include: {
+                        bids: true,
+                    },
+                },
+                order: true,
+            },
+        });
+
+        if (!product) {
+            throw new Error('Product not found');
+        }
+
+        // Check if product has been sold
+        if (product.status === 'SOLD' || product.order) {
+            throw new Error('Cannot delete a sold product');
+        }
+
+        // Check if auction has bids
+        if (product.auction?.bids?.length > 0) {
+            throw new Error('Cannot delete product with existing bids');
+        }
+
+        // Check if event products have bids
+        const hasEventBids = product.eventProducts.some(ep => ep.bids.length > 0);
+        if (hasEventBids) {
+            throw new Error('Cannot delete product with existing bids in events');
+        }
+
+        // Use transaction to delete related records first
+        return this.prisma.$transaction(async (tx) => {
+            // Delete auction if exists
+            if (product.auction) {
+                await tx.auction.delete({
+                    where: { id: product.auction.id },
+                });
+            }
+
+            // Delete event products if any
+            if (product.eventProducts.length > 0) {
+                await tx.eventProduct.deleteMany({
+                    where: { productId: id },
+                });
+            }
+
+            // Delete watchlist entries
+            await tx.watchlist.deleteMany({
+                where: { productId: id },
+            });
+
+            // Finally delete the product
+            return tx.product.delete({
+                where: { id },
+            });
         });
     }
 }

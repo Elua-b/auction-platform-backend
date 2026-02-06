@@ -11,7 +11,7 @@ export class AuctionsService {
         private biddingGateway: BiddingGateway,
     ) { }
 
-    async create(data: { productId: string; startTime: Date; endTime: Date }, sellerId: string) {
+    async create(data: { productId: string; startTime: string | Date; endTime: string | Date }, sellerId: string) {
         const product = await this.prisma.product.findUnique({
             where: { id: data.productId },
         });
@@ -24,9 +24,15 @@ export class AuctionsService {
             throw new Error('You do not own this product');
         }
 
+        // Convert string dates to Date objects if needed
+        const startTime = typeof data.startTime === 'string' ? new Date(data.startTime) : data.startTime;
+        const endTime = typeof data.endTime === 'string' ? new Date(data.endTime) : data.endTime;
+
         return this.prisma.auction.create({
             data: {
-                ...data,
+                productId: data.productId,
+                startTime,
+                endTime,
                 status: 'UPCOMING',
             },
         });
