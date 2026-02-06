@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String
+  phone     String?
+  avatar    String?
+  bio       String?
+
+  roleId    String   @map("role_id")
+  role      Role     @relation(fields: [roleId], references: [id])
+
+  isActive  Boolean  @default(true) @map("is_active")
+  lastLogin DateTime? @map("last_login")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  products  Product[] @relation("SellerProducts")
+  bids      Bid[]
+  orders    Order[]
+  watchlist Watchlist[]
+  notifications Notification[]
+  reviewsMade Review[] @relation("BuyerReviews")
+  reviewsReceived Review[] @relation("SellerReviews")
+
+  @@index([email])
+  @@index([roleId])
+  @@map("User")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique // ADMIN, SELLER, BUYER
+  description String?
+  permissions String[]
+
+  users       User[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+
+  @@map("Role")
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  image       String?
+
+  products    Product[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+
+  @@map("Category")
+}
+
+model Product {
+  id            String   @id @default(uuid())
+  title         String
+  description   String
+  image         String?
+  startingPrice Float    @map("starting_price")
+  currentPrice  Float    @default(0) @map("current_price")
+  status        String   @default("AVAILABLE") // AVAILABLE, AUCTIONED, SOLD, CANCELLED
+
+  categoryId    String   @map("category_id")
+  category      Category @relation(fields: [categoryId], references: [id])
+
+  sellerId      String   @map("seller_id")
+  seller        User     @relation("SellerProducts", fields: [sellerId], references: [id])
+
+  auction       Auction?
+  eventProducts EventProduct[]
+  order         Order?
+  watchlist     Watchlist[]
+  reviews       Review[]
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt      @map("updated_at")
+
+  @@index([sellerId])
+  @@index([categoryId])
+  @@map("Product")
+}
+
+model Auction {
+  id          String   @id @default(uuid())
+  productId   String   @unique @map("product_id")
+  product     Product  @relation(fields: [productId], references: [id])
+
+  startTime   DateTime @map("start_time")
+  endTime     DateTime @map("end_time")
+  status      String   @default("UPCOMING") // UPCOMING, ACTIVE, ENDED, CANCELLED
+
+  bids        Bid[]
+  reviews     Review[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+
+  @@map("Auction")
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  date        DateTime
+  startTime   String   @map("start_time")
+  status      String   @default("SCHEDULED") // SCHEDULED, LIVE, COMPLETED
+
+  products    EventProduct[]
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt      @map("updated_at")
+
+  @@map("Event")
+}
+
+model EventProduct {
+  id            String   @id @default(uuid())
+  eventId       String   @map("event_id")
+  event         Event    @relation(fields: [eventId], references: [id])
+
+  productId     String   @map("product_id")
+  product       Product  @relation(fields: [productId], references: [id])
+
+  order         Int      @default(0) // Order of product in the live event
+  endsAt        DateTime? @map("ends_at") // End time for bidding on this specific product lot
+  durationLimit Int?     @map("duration_limit") // Bidding duration in seconds for this item
+
+  bids          Bid[]
+
+  @@map("EventProduct")
+}
+
+model Bid {
+  id              String   @id @default(uuid())
+  amount          Float
+  
+  userId          String   @map("user_id")
+  user            User     @relation(fields: [userId], references: [id])
+
+  auctionId       String?  @map("auction_id")
+  auction         Auction? @relation(fields: [auctionId], references: [id])
+
+  eventProductId  String?  @map("event_product_id")
+  eventProduct    EventProduct? @relation(fields: [eventProductId], references: [id])
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([auctionId])
+  @@index([eventProductId])
+  @@map("Bid")
+}
+
+model Order {
+  id            String   @id @default(uuid())
+  amount        Float
+  
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id])
+
+  productId     String   @unique @map("product_id")
+  product       Product  @relation(fields: [productId], references: [id])
+
+  paymentStatus String   @default("PENDING") @map("payment_status") // PENDING, PAID, FAILED
+  shippingStatus String  @default("NOT_SHIPPED") @map("shipping_status") // NOT_SHIPPED, SHIPPED, DELIVERED
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt      @map("updated_at")
+
+  @@index([userId])
+  @@map("Order")
+}
+
+model Watchlist {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, productId])
+  @@map("Watchlist")
+}
+
+model Notification {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  user             User     @relation(fields: [userId], references: [id])
+  type             String // outbid, won, etc.
+  message          String
+  relatedAuctionId String?  @map("related_auction_id")
+  read             Boolean  @default(false)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("Notification")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int
+  title     String?
+  comment   String?
+  
+  buyerId   String   @map("buyer_id")
+  buyer     User     @relation("BuyerReviews", fields: [buyerId], references: [id])
+  
+  sellerId  String   @map("seller_id")
+  seller    User     @relation("SellerReviews", fields: [sellerId], references: [id])
+  
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id])
+  
+  auctionId String   @map("auction_id")
+  auction   Auction  @relation(fields: [auctionId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  @@map("Review")
+}
