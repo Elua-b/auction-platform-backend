@@ -50,12 +50,12 @@ export class EventsController {
         return this.eventsService.endEvent(id);
     }
 
-    @Post(':id/activate-product/:eventProductId')
+    @Post(':id/products/:eventProductId/activate')
     activateProduct(@Param('id') id: string, @Param('eventProductId') eventProductId: string, @Body('duration') duration: number) {
         return this.eventsService.activateProduct(id, eventProductId, duration);
     }
 
-    @Post(':id/end-product/:eventProductId')
+    @Post(':id/products/:eventProductId/end')
     endProduct(@Param('id') id: string, @Param('eventProductId') eventProductId: string) {
         return this.eventsService.endEventProduct(id, eventProductId);
     }

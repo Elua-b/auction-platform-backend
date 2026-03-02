@@ -17,6 +17,8 @@ export class BidsService {
         // Override userId from DTO
         createBidDto.userId = userId;
 
+        let eventId: string | undefined;
+
         let productId: string;
         let productName: string;
 
@@ -61,6 +63,7 @@ export class BidsService {
             }
             productId = eventProduct.productId;
             productName = eventProduct.product.title;
+            eventId = eventProduct.eventId;
         } else {
             throw new BadRequestException('Either auctionId or eventProductId must be provided');
         }
@@ -68,7 +71,12 @@ export class BidsService {
         // Use a transaction to create the bid and update the product price
         const bid = await this.prisma.$transaction(async (tx) => {
             const newBid = await tx.bid.create({
-                data: createBidDto,
+                data: {
+                    amount,
+                    userId,
+                    auctionId: auctionId ?? null,
+                    eventProductId: eventProductId ?? null,
+                },
             });
 
             await tx.product.update({
@@ -89,16 +97,19 @@ export class BidsService {
             );
         }
 
-        // Broadcast the bid
+        const bidUser = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { name: true, avatar: true },
+        });
+
+        // Broadcast the bid to the correct room
         this.biddingGateway.broadcastBid({
             auctionId,
             eventProductId,
+            eventId,
             bid: {
                 ...bid,
-                user: await this.prisma.user.findUnique({
-                    where: { id: userId },
-                    select: { name: true, avatar: true },
-                }),
+                user: bidUser,
             },
         });
 
@@ -134,7 +145,7 @@ export class BidsService {
             where: { userId },
             include: {
                 auction: { include: { product: true } },
-                eventProduct: { include: { product: true } },
+                eventProduct: { include: { product: true, event: true } },
             },
             orderBy: { createdAt: 'desc' },
         });

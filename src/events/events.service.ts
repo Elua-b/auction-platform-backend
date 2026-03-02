@@ -55,8 +55,8 @@ export class EventsService {
     async addProductToEvent(eventId: string, productId: string, order: number) {
         return this.prisma.eventProduct.create({
             data: {
-                eventId,
-                productId,
+                event: { connect: { id: eventId } },
+                product: { connect: { id: productId } },
                 order,
             },
         });

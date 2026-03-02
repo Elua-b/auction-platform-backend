@@ -47,6 +47,7 @@ export class OrdersService {
                 product: {
                     include: {
                         category: true,
+                        seller: { select: { id: true, name: true, email: true, phone: true } },
                     },
                 },
             },

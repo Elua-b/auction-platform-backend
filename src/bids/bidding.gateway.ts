@@ -51,10 +51,14 @@ export class BiddingGateway implements OnGatewayConnection, OnGatewayDisconnect 
         this.logger.log(`Client ${client.id} left event ${eventId}`);
     }
 
-    broadcastBid(data: { auctionId?: string; eventProductId?: string; bid: any }) {
+    broadcastBid(data: { auctionId?: string; eventProductId?: string; eventId?: string; bid: any }) {
         if (data.auctionId) {
             this.server.to(`auction:${data.auctionId}`).emit('bidPlaced', data.bid);
+        } else if (data.eventId) {
+            // Broadcast only to clients in the specific event room
+            this.server.to(`event:${data.eventId}`).emit('liveBidPlaced', data.bid);
         } else if (data.eventProductId) {
+            // Fallback: broadcast globally if eventId is not available (should not happen)
             this.server.emit('liveBidPlaced', data.bid);
         }
     }
