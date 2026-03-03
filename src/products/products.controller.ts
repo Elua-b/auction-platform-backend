@@ -21,8 +21,14 @@ export class ProductsController {
         @Query('categoryId') categoryId?: string,
         @Query('status') status?: string,
         @Query('sellerId') sellerId?: string,
+        @Query('standalone') standalone?: string,
     ) {
-        return this.productsService.findAll({ categoryId, status, sellerId });
+        return this.productsService.findAll({
+            categoryId,
+            status,
+            sellerId,
+            standalone: standalone === 'true'
+        });
     }
 
     @Get(':id')

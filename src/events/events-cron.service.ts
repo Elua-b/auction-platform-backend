@@ -30,10 +30,8 @@ export class EventsCronService {
         });
 
         for (const event of scheduledEvents) {
-            // Combine date and startTime (e.g., "14:30")
+            // Use event.date directly as it now contains the full UTC timestamp
             const eventDateTime = new Date(event.date);
-            const [hours, minutes] = event.startTime.split(':').map(Number);
-            eventDateTime.setHours(hours, minutes, 0, 0);
 
             if (now >= eventDateTime) {
                 this.logger.log(`Starting event ${event.id}: ${event.title}`);
