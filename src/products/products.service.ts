@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../infra/config/prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 
@@ -49,14 +49,29 @@ export class ProductsService {
         });
     }
 
-    async update(id: string, data: any) {
+    private async checkOwnership(productId: string, user: any) {
+        const product = await this.prisma.product.findUnique({
+            where: { id: productId },
+            select: { sellerId: true }
+        });
+
+        if (!product) throw new NotFoundException('Product not found');
+
+        if (user.role !== 'ADMIN' && product.sellerId !== user.id) {
+            throw new ForbiddenException('You do not have permission to manage this product');
+        }
+    }
+
+    async update(id: string, data: any, user: any) {
+        await this.checkOwnership(id, user);
         return this.prisma.product.update({
             where: { id },
             data,
         });
     }
 
-    async remove(id: string) {
+    async remove(id: string, user: any) {
+        await this.checkOwnership(id, user);
         // First check if product exists and get related data
         const product = await this.prisma.product.findUnique({
             where: { id },

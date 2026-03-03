@@ -31,12 +31,16 @@ export class ProductsController {
     }
 
     @Patch(':id')
-    update(@Param('id') id: string, @Body() updateProductDto: any) {
-        return this.productsService.update(id, updateProductDto);
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles('SELLER', 'ADMIN')
+    update(@Param('id') id: string, @Body() updateProductDto: any, @Request() req) {
+        return this.productsService.update(id, updateProductDto, req.user);
     }
 
     @Delete(':id')
-    remove(@Param('id') id: string) {
-        return this.productsService.remove(id);
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles('SELLER', 'ADMIN')
+    remove(@Param('id') id: string, @Request() req) {
+        return this.productsService.remove(id, req.user);
     }
 }

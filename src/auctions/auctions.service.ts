@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../infra/config/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BiddingGateway } from '../bids/bidding.gateway';
@@ -213,14 +213,23 @@ export class AuctionsService {
         return this.endAuction(id);
     }
 
-    async remove(id: string) {
+    async remove(id: string, user: any) {
         const auction = await this.prisma.auction.findUnique({
             where: { id },
-            include: { bids: true },
+            include: {
+                bids: true,
+                product: {
+                    select: { sellerId: true }
+                }
+            },
         });
 
         if (!auction) {
             throw new Error('Auction not found');
+        }
+
+        if (user.role !== 'ADMIN' && auction.product.sellerId !== user.id) {
+            throw new ForbiddenException('You do not have permission to delete this auction');
         }
 
         if (auction.status === 'ACTIVE' || auction.status === 'ENDED') {

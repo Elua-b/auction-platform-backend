@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../infra/config/prisma/prisma.service';
 import { BiddingGateway } from '../bids/bidding.gateway';
 
@@ -11,7 +11,7 @@ export class EventsService {
         private biddingGateway: BiddingGateway,
     ) { }
 
-    async create(data: { title: string; description?: string; date: Date; startTime: string }) {
+    async create(data: { title: string; description?: string; date: Date; startTime: string; sellerId: string }) {
         return this.prisma.event.create({
             data: {
                 ...data,
@@ -20,15 +20,23 @@ export class EventsService {
         });
     }
 
-    async findAll(status?: string) {
+    async findAll(status?: string, sellerId?: string) {
         return this.prisma.event.findMany({
             where: {
                 ...(status && { status }),
+                ...(sellerId && { sellerId }),
             },
             include: {
                 _count: {
                     select: { products: true },
                 },
+                seller: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true
+                    }
+                }
             },
         });
     }
@@ -48,11 +56,45 @@ export class EventsService {
                     },
                     orderBy: { order: 'asc' },
                 },
+                seller: {
+                    select: {
+                        id: true,
+                        name: true,
+                        avatar: true
+                    }
+                }
             },
         });
     }
 
-    async addProductToEvent(eventId: string, productId: string, order: number) {
+    private async checkOwnership(eventId: string, user: any) {
+        const event = await this.prisma.event.findUnique({
+            where: { id: eventId },
+            select: { sellerId: true, status: true }
+        });
+
+        if (!event) throw new NotFoundException('Event not found');
+
+        if (user.role !== 'ADMIN' && event.sellerId !== user.id) {
+            throw new ForbiddenException('You do not have permission to manage this event');
+        }
+        return event;
+    }
+
+    async addProductToEvent(eventId: string, productId: string, order: number, user: any) {
+        await this.checkOwnership(eventId, user);
+
+        // Also check if the product belongs to the seller
+        const product = await this.prisma.product.findUnique({
+            where: { id: productId },
+            select: { sellerId: true }
+        });
+
+        if (!product) throw new NotFoundException('Product not found');
+        if (user.role !== 'ADMIN' && product.sellerId !== user.id) {
+            throw new ForbiddenException('You can only add your own products to events');
+        }
+
         return this.prisma.eventProduct.create({
             data: {
                 event: { connect: { id: eventId } },
@@ -62,20 +104,23 @@ export class EventsService {
         });
     }
 
-    async removeProductFromEvent(id: string, eventProductId: string) {
+    async removeProductFromEvent(eventId: string, eventProductId: string, user: any) {
+        await this.checkOwnership(eventId, user);
         return this.prisma.eventProduct.delete({
             where: { id: eventProductId },
         });
     }
 
-    async updateStatus(id: string, status: string) {
+    async updateStatus(id: string, status: string, user: any) {
+        await this.checkOwnership(id, user);
         return this.prisma.event.update({
             where: { id },
             data: { status },
         });
     }
 
-    async startEvent(id: string) {
+    async startEvent(id: string, user: any) {
+        await this.checkOwnership(id, user);
         const event = await this.prisma.event.update({
             where: { id },
             data: { status: 'LIVE' },
@@ -84,7 +129,8 @@ export class EventsService {
         return event;
     }
 
-    async endEvent(id: string) {
+    async endEvent(id: string, user: any) {
+        await this.checkOwnership(id, user);
         const event = await this.prisma.event.update({
             where: { id },
             data: { status: 'COMPLETED' },
@@ -93,7 +139,8 @@ export class EventsService {
         return event;
     }
 
-    async activateProduct(eventId: string, eventProductId: string, durationMinutes: number) {
+    async activateProduct(eventId: string, eventProductId: string, durationMinutes: number, user: any) {
+        await this.checkOwnership(eventId, user);
         const endsAt = new Date(Date.now() + durationMinutes * 60000);
 
         // Clear existing timeout if any
@@ -127,7 +174,7 @@ export class EventsService {
 
         // Set automatic end timer
         const timer = setTimeout(() => {
-            this.endEventProduct(eventId, eventProductId).catch(err => {
+            this.endEventProduct(eventId, eventProductId, user).catch(err => {
                 console.error(`Failed to auto-end product ${eventProductId}:`, err);
             });
         }, durationMinutes * 60000);
@@ -137,7 +184,14 @@ export class EventsService {
         return eventProduct;
     }
 
-    async endEventProduct(eventId: string, eventProductId: string) {
+    async endEventProduct(eventId: string, eventProductId: string, user: any) {
+        // Validation check (can be skipped for auto-end if needed, but safer to keep)
+        // Note: For auto-end triggered by system timer, 'user' might be different or null.
+        // We'll allow it if 'user' is the owner or if no user is provided (system call)
+        if (user) {
+            await this.checkOwnership(eventId, user);
+        }
+
         // Clear timeout if this was called manually
         if (this.lotTimeouts.has(eventProductId)) {
             clearTimeout(this.lotTimeouts.get(eventProductId));
@@ -235,14 +289,8 @@ export class EventsService {
         };
     }
 
-    async update(id: string, data: { title?: string; description?: string; date?: Date; startTime?: string }) {
-        const event = await this.prisma.event.findUnique({
-            where: { id },
-        });
-
-        if (!event) {
-            throw new Error('Event not found');
-        }
+    async update(id: string, data: { title?: string; description?: string; date?: Date; startTime?: string }, user: any) {
+        const event = await this.checkOwnership(id, user);
 
         if (event.status === 'LIVE' || event.status === 'ENDED') {
             throw new Error('Cannot update live or ended events');
@@ -254,15 +302,8 @@ export class EventsService {
         });
     }
 
-    async remove(id: string) {
-        const event = await this.prisma.event.findUnique({
-            where: { id },
-            include: { products: true },
-        });
-
-        if (!event) {
-            throw new Error('Event not found');
-        }
+    async remove(id: string, user: any) {
+        const event = await this.checkOwnership(id, user);
 
         if (event.status === 'LIVE' || event.status === 'ENDED') {
             throw new Error('Cannot delete live or ended events');

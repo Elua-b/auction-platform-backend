@@ -37,7 +37,7 @@ export class EventsCronService {
 
             if (now >= eventDateTime) {
                 this.logger.log(`Starting event ${event.id}: ${event.title}`);
-                await this.eventsService.startEvent(event.id);
+                await this.eventsService.startEvent(event.id, { role: 'ADMIN' });
             }
         }
 
@@ -55,7 +55,7 @@ export class EventsCronService {
 
         for (const lot of activeLots) {
             this.logger.log(`Auto-ending lot ${lot.id} for event ${lot.eventId}`);
-            await this.eventsService.endEventProduct(lot.eventId, lot.id);
+            await this.eventsService.endEventProduct(lot.eventId, lot.id, { role: 'ADMIN' });
         }
     }
 }

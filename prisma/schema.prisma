@@ -26,6 +26,7 @@ model User {
   updatedAt DateTime @updatedAt      @map("updated_at")
 
   products  Product[] @relation("SellerProducts")
+  events    Event[]   @relation("SellerEvents")
   bids      Bid[]
   orders    Order[]
   watchlist Watchlist[]
@@ -121,11 +122,15 @@ model Event {
   startTime   String   @map("start_time")
   status      String   @default("SCHEDULED") // SCHEDULED, LIVE, COMPLETED
 
+  sellerId    String?  @map("seller_id")
+  seller      User?    @relation("SellerEvents", fields: [sellerId], references: [id])
+
   products    EventProduct[]
 
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt      @map("updated_at")
 
+  @@index([sellerId])
   @@map("Event")
 }
 

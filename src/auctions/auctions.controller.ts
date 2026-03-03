@@ -52,7 +52,7 @@ export class AuctionsController {
     @Delete(':id')
     @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles('SELLER', 'ADMIN')
-    remove(@Param('id') id: string) {
-        return this.auctionsService.remove(id);
+    remove(@Param('id') id: string, @Request() req) {
+        return this.auctionsService.remove(id, req.user);
     }
 }
