@@ -17,12 +17,13 @@ export class ProductsService {
         });
     }
 
-    async findAll(filters: { categoryId?: string; status?: string; sellerId?: string }) {
+    async findAll(filters: { categoryId?: string; status?: string; sellerId?: string; standalone?: boolean }) {
         return this.prisma.product.findMany({
             where: {
                 ...(filters.categoryId && { categoryId: filters.categoryId }),
                 ...(filters.status && { status: filters.status }),
                 ...(filters.sellerId && { sellerId: filters.sellerId }),
+                ...(filters.standalone && { eventProducts: { none: {} } }),
             },
             include: {
                 category: true,
@@ -45,6 +46,11 @@ export class ProductsService {
                 category: true,
                 seller: true,
                 auction: true,
+                eventProducts: {
+                    include: {
+                        event: true
+                    }
+                }
             },
         });
     }
